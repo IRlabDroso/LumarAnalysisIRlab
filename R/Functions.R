@@ -513,13 +513,14 @@ PlotResume = function(csv,groupby = "antenna",z_score = T){
 
 create_pdf = function(csv_DF,odorant,z_score = F,name_file){
 
-  dataset = Finding_pics(csv_input = csv_DF,exp_odorant = as.character(odorant))
+  dataset = Finding_pics(csv_input = csv_DF$rolling_mean,exp_odorant = as.character(odorant))
+  dataset_normalized = Finding_pics(csv_input = csv_DF$normalized,exp_odorant = as.character(odorant))
   dataset$pulse_csv = Z_score_calculation(dataset$pulse_csv)
 
   ### Create PDF ###
   pdf(name_file)
+  PlotTrace(csv = dataset_normalized,combined = F,z_score = z_score)
   PlotTrace(csv = dataset,combined = T,z_score = z_score)
-  PlotTrace(csv = dataset,combined = F,z_score = z_score)
   PlotTraceCondition(csv=dataset,groupBy = "pulse",z_score = z_score)
   PlotTraceCondition(csv=dataset,groupBy = "antenna",z_score = z_score)
   res_antenna = PlotResume(csv=dataset,groupby = "antenna",z_score = z_score)
@@ -536,7 +537,7 @@ pipeline = function(z_score = F){
   ### load all datasets needed ###
   exp.info = Read_Exp_info()
   csv = Split_CSV(getwd())
-  csv_DF = format_csv(csv=csv)$rolling_mean
+  csv_DF = format_csv(csv=csv)
 
   ### create file names ###
   nametags <- LETTERS
@@ -600,25 +601,24 @@ pipeline = function(z_score = F){
   for(i in 1:length(levels(for_resume_final$short_cond_names))){
 
     ### create new df and add score column aka if double the mean of water 1 value = green color ###
-    df = for_resume_final[for_resume_final$short_cond_names == levels(for_resume_final$short_cond_names)[i],]
-    color = df %>% group_by(odorant,variable,short_cond_names) %>% summarize(Mean = max(max_zscore))
+    df =for_resume_final[for_resume_final$short_cond_names == levels(for_resume_final$short_cond_names)[i],]
+    color = df %>% group_by(odorant,variable,short_cond_names) %>% mutate(Mean = max(max_zscore))
     water_mean = mean(color$Mean[color$odorant=="water 1"])
-    color = color %>% mutate(score = as.factor(ifelse(Mean > water_mean*2,0,1)))
-    new_df = merge(df,color[,c("variable","Mean","score")],by = "variable")
-
+    color = color %>% mutate(score = as.factor(ifelse(Mean > water_mean*2,1,0)))
 
     if(i == 1){
-      p = ggplot(new_df,aes(variable,max_zscore))+
+      p = ggplot(color,aes(variable,max_zscore,fill=score))+
         geom_boxplot()+
         ylab(levels(for_resume_final$short_cond_names)[i])+
         scale_y_continuous(limits = c(0,max_value))+
         theme(axis.title.x = element_blank(),
               strip.text = element_text(size=7),
               legend.position = "none")+
-        facet_grid(~odorant,scales="free")
-      #scale_fill_manual(values = c("green","white"))
+        facet_grid(~odorant,scales="free")+
+        scale_fill_manual(values = c("white","green"))
+
     }else{
-      p = ggplot(new_df,aes(variable,max_zscore))+
+      p = ggplot(color,aes(variable,max_zscore,fill=score))+
         geom_boxplot()+
         scale_y_continuous(limits = c(0,max_value))+
         ylab(levels(for_resume_final$short_cond_names)[i])+
@@ -627,8 +627,8 @@ pipeline = function(z_score = F){
               strip.background = element_blank(),
               strip.text.x = element_blank(),
               legend.position = "none")+
-        facet_grid(~odorant,scales="free")
-      #scale_fill_manual(values = c("green","white"))
+        facet_grid(~odorant,scales="free")+
+        scale_fill_manual(values = c("white","green"))
     }
 
     plot_list = c(plot_list,list(p))
