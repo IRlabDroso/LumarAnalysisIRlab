@@ -4,12 +4,14 @@
 \alias{Finding_pics}
 \title{Finding_pics}
 \usage{
-Finding_pics(csv_input, exp_odorant = NULL)
+Finding_pics(csv_input, exp_odorant = NULL, only_trace = F)
 }
 \arguments{
 \item{csv_input}{rolling_mean table output of \code{\link{format_csv}}.}
 
 \item{exp_odorant}{An odorant name present in the csv_input.}
+
+\item{only_trace}{Default = False, option to skip the calculation to gain time if pics not needed to be computed.}
 }
 \description{
 Find the pics in the data and superpose them for 1 odorant

@@ -4,7 +4,7 @@
 \alias{format_csv}
 \title{format_csv}
 \usage{
-format_csv(csv_input)
+format_csv(csv_input, delta_F_dan = F)
 }
 \arguments{
 \item{csv_input}{table output of \code{\link{Split_CSV}}.}

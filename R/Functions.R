@@ -1,20 +1,5 @@
 
 
-# library(ggplot2)
-# library(reshape2)
-# library(dplyr)
-# library(tseries)
-# library(patchwork)
-# library(hash)
-# library(zoo)
-# library(rlang)
-# library(ggforce)
-# library(tidyverse)
-# library(rstatix)
-# library(ggpubr)
-
-
-
 #' Read the exp_info.csv file
 #'
 #' @title Read_Exp_info
@@ -124,7 +109,7 @@ Split_CSV = function(directory,length_exp = 184){
 #' df = format_csv(csv_input = csv_split)
 #'
 #' @export
-format_csv = function(csv_input){
+format_csv = function(csv_input,delta_F_dan = F){
 
   ### read csv ###
   exp.info = Read_Exp_info()
@@ -139,7 +124,7 @@ format_csv = function(csv_input){
   f = sweep(csv[,-1],2,colmean,"-")
   DF = sweep(f,2,colmean,"/")
 
-  melted = reshape2::melt(csv,id="Timing")
+  melted = melt(csv,id="Timing")
   melted = melted %>% group_by(variable) %>% mutate(ma=rollmean(as.numeric(value),25, align = "right", fill = NA))
   rollwithdf<-mutate(melted, deltaf=((as.numeric(value)-ma)/ma))
   rollwithdf2 <- dplyr::select(rollwithdf, Timing,variable,deltaf)
@@ -167,7 +152,7 @@ format_csv = function(csv_input){
   csv_DF = cbind(csv_DF,"odorant" = csv_input$odorant)
   new_csv = cbind(new_csv,"odorant" = csv_input$odorant)
 
-  return(list(normalized = csv_DF,rolling_mean=new_csv))
+  return(list(normalized = csv_DF,rolling_mean=new_csv,raw=csv))
 }
 
 ####################### Finding pics ########################
@@ -187,13 +172,14 @@ rollingSlope.lm <- function(vector) {
 #'
 #' @param csv_input rolling_mean table output of \code{\link{format_csv}}.
 #' @param exp_odorant An odorant name present in the csv_input.
+#' @param only_trace Default = False, option to skip the calculation to gain time if pics not needed to be computed.
 #'
 #' @examples
 #' csv_df = format_csv(csv)
 #' Finding_pics(csv_df$rolling_mean, exp_odorant="water 1")
 #'
 #' @export
-Finding_pics =function(csv_input,exp_odorant = NULL){
+Finding_pics =function(csv_input,exp_odorant = NULL,only_trace = F){
 
   ### Read exp_info ###
   exp.info = Read_Exp_info()
@@ -216,91 +202,97 @@ Finding_pics =function(csv_input,exp_odorant = NULL){
     }
   }
 
-  for(i in 2:(ncol(csv)-2)){
-    name_antenna = colnames(csv)[i]
+  if(!only_trace){# to not go into the big loop when just need to cut it and rank it usefull for create_pdf func
+    for(i in 2:(ncol(csv)-2)){
+      name_antenna = colnames(csv)[i]
 
-    no_response = F# to know if we have a response for this odor or not
+      no_response = T# to know if we have a response for this odor or not
 
-    ### Finding the max autocorelation for the first pics ###
-    ACF = acf(csv[,i],pl=F,lag = 500)
-    ACF = as.data.frame(cbind(ACF$lag,ACF$acf))
+      ### Finding the max autocorelation for the first pics ###
+      ACF = acf(csv[,i],pl=F,lag = 500)
+      ACF = as.data.frame(cbind(ACF$lag,ACF$acf))
 
-    # Find the max value
-    max_1 = which(ACF$V2 == max(ACF$V2[ACF$V1>380]))
-    if(max_1 < 380 | max(ACF$V2[ACF$V1>380]) < 0.35){
-      no_response = T
-      # 409 = 184 / 60 / 3 / 0.0025 aka how much frame are in each pulse test
-      max_1 = 409 #default value that seems to works properly, This is used only for no response signals so don't care much
-    }
+      # Find the max value
+      max_1 = which(ACF$V2 == max(ACF$V2[ACF$V1>380]))
+      if(max_1 < 380 | max(ACF$V2[ACF$V1>380]) < 0.35){
+        no_response = T
+        # 409 = 184 / 60 / 3 / 0.0025 aka how much frame are in each pulse test
+        max_1 = 409 #default value that seems to works properly, This is used only for no response signals so don't care much
+      }
 
-    ### Finding the max autocorelation for the second and third pics ###
-    ACF = acf(csv[csv$Timing>csv$Timing[max_1],i],pl=F,lag = 500)
-    ACF = as.data.frame(cbind(ACF$lag,ACF$acf))
-    max_2 = which(ACF$V2 == max(ACF$V2[ACF$V1>100]))
+      ### Finding the max autocorelation for the second and third pics ###
+      ACF = acf(csv[csv$Timing>csv$Timing[max_1],i],pl=F,lag = 500)
+      ACF = as.data.frame(cbind(ACF$lag,ACF$acf))
+      max_2 = which(ACF$V2 == max(ACF$V2[ACF$V1>100]))
 
-    if(max_2 < 380 | max(ACF$V2[ACF$V1>380]) < 0.35){
-      # 409 = 184 / 60 / 3 / 0.0025 aka how much frame are in each pulse test
-      no_response = T
-      max_2 = 409 #default value that seems to works properly, This is used only for no response signals so don't care much
-    }
+      if(max_2 < 380 | max(ACF$V2[ACF$V1>380]) < 0.35){
+        # 409 = 184 / 60 / 3 / 0.0025 aka how much frame are in each pulse test
+        no_response = T
+        max_2 = 409 #default value that seems to works properly, This is used only for no response signals so don't care much
+      }
 
-    First_pic = csv[csv$Timing<=csv$Timing[max_1],]
-    Second_pic = csv[csv$Timing>csv$Timing[max_1] & csv$Timing<=csv$Timing[(max_1+max_2)],]
-    Third_pic = csv[csv$Timing>csv$Timing[(max_1+max_2)],]
+      First_pic = csv[csv$Timing<=csv$Timing[max_1],]
+      Second_pic = csv[csv$Timing>csv$Timing[max_1] & csv$Timing<=csv$Timing[(max_1+max_2)],]
+      Third_pic = csv[csv$Timing>csv$Timing[(max_1+max_2)],]
 
-    ### Calculate rolling slope for each pulse ###
-    First_pic = First_pic %>%mutate(Slope.lm = First_pic[[name_antenna]])%>% mutate(Slope.lm = rollapply(Slope.lm, width=5, FUN=rollingSlope.lm, fill=NA))
-    Second_pic = Second_pic %>%mutate(Slope.lm = Second_pic[[name_antenna]])%>% mutate(Slope.lm = rollapply(Slope.lm, width=5, FUN=rollingSlope.lm, fill=NA))
-    Third_pic = Third_pic %>%mutate(Slope.lm = Third_pic[[name_antenna]])%>% mutate(Slope.lm = rollapply(Slope.lm, width=5, FUN=rollingSlope.lm, fill=NA))
+      ### Calculate rolling slope for each pulse ###
+      First_pic = First_pic %>%mutate(Slope.lm = First_pic[[name_antenna]])%>% mutate(Slope.lm = rollapply(Slope.lm, width=10, FUN=rollingSlope.lm, fill=NA))
+      Second_pic = Second_pic %>%mutate(Slope.lm = Second_pic[[name_antenna]])%>% mutate(Slope.lm = rollapply(Slope.lm, width=10, FUN=rollingSlope.lm, fill=NA))
+      Third_pic = Third_pic %>%mutate(Slope.lm = Third_pic[[name_antenna]])%>% mutate(Slope.lm = rollapply(Slope.lm, width=10, FUN=rollingSlope.lm, fill=NA))
 
-    ### Find the max slope and set as 0 to synchronize the pulses ###
-    if(no_response){#theory should be each 409
-      First_pic$Timing = First_pic$Timing - First_pic$Timing[(nrow(First_pic)/2)]
-      Second_pic$Timing = Second_pic$Timing - Second_pic$Timing[(nrow(Second_pic)/2)]
-      Third_pic$Timing = Third_pic$Timing - Third_pic$Timing[(nrow(Third_pic)/2)]
-    }else{
-      First_pic$Timing = First_pic$Timing - First_pic$Timing[which.max(First_pic$Slope.lm)]
-      Second_pic$Timing = Second_pic$Timing - Second_pic$Timing[which.max(Second_pic$Slope.lm)]
-      Third_pic$Timing = Third_pic$Timing - Third_pic$Timing[which.max(Third_pic$Slope.lm)]
-    }
-
-
-    ### Normalize the values with new 0 as reference ###
-    First_0 = which(First_pic$Timing==0)
-    Second_0 = which(Second_pic$Timing==0)
-    Third_0 = which(Third_pic$Timing==0)
-    First_pic[,i] = First_pic[,i] - mean(First_pic[(First_0-15):(First_0-2),i])
-    Second_pic[,i] = Second_pic[,i] - mean(Second_pic[(Second_0-15):(Second_0-2),i])
-    Third_pic[,i] = Third_pic[,i] - mean(Third_pic[(Third_0-15):(Third_0-2),i])
+      ### Find the max slope and set as 0 to synchronize the pulses ###
+      if(no_response){#theory should be each 409
+        First_pic$Timing = First_pic$Timing - First_pic$Timing[(nrow(First_pic)/2)]
+        Second_pic$Timing = Second_pic$Timing - Second_pic$Timing[(nrow(Second_pic)/2)]
+        Third_pic$Timing = Third_pic$Timing - Third_pic$Timing[(nrow(Third_pic)/2)]
+      }else{
+        First_pic$Timing = First_pic$Timing - First_pic$Timing[which.max(First_pic$Slope.lm)]
+        Second_pic$Timing = Second_pic$Timing - Second_pic$Timing[which.max(Second_pic$Slope.lm)]
+        Third_pic$Timing = Third_pic$Timing - Third_pic$Timing[which.max(Third_pic$Slope.lm)]
+      }
 
 
-    ### Merge pics + create a melted DF ###
-    dfs = list(First_pic[,c("Timing",name_antenna)],Second_pic[,c("Timing",name_antenna)],Third_pic[,c("Timing",name_antenna)])
+      ### Normalize the values with new 0 as reference ###
+      First_0 = which(First_pic$Timing==0)
+      Second_0 = which(Second_pic$Timing==0)
+      Third_0 = which(Third_pic$Timing==0)
+      First_pic[,i] = First_pic[,i] - mean(First_pic[(First_0-15):(First_0-2),i])
+      Second_pic[,i] = Second_pic[,i] - mean(Second_pic[(Second_0-15):(Second_0-2),i])
+      Third_pic[,i] = Third_pic[,i] - mean(Third_pic[(Third_0-15):(Third_0-2),i])
 
-    melted_CSV = Reduce(function(x,y) merge(x,y,by="Timing"),dfs)
-    colnames(melted_CSV) = c("Timing",paste(name_antenna,c("pic_1","pic_2","pic_3"),sep = "/"))#use "/" to split in next function
-    melted_CSV_long = reshape2::melt(melted_CSV,id.vars = "Timing")
 
-    ### return the merged CSV + combined scaled pics csv ###
-    if(is_empty(pulse_csv)){#if first antenna
-      pulse_csv = melted_CSV
+      ### Merge pics + create a melted DF ###
+      dfs = list(First_pic[,c("Timing",name_antenna)],Second_pic[,c("Timing",name_antenna)],Third_pic[,c("Timing",name_antenna)])
+
+      melted_CSV = Reduce(function(x,y) merge(x,y,by="Timing"),dfs)
+      colnames(melted_CSV) = c("Timing",paste(name_antenna,c("pic_1","pic_2","pic_3"),sep = "/"))#use "/" to split in next function
+      melted_CSV_long = melt(melted_CSV,id.vars = "Timing")
+
+      ### return the merged CSV + combined scaled pics csv ###
+      if(is_empty(pulse_csv)){#if first antenna
+        pulse_csv = melted_CSV
+
+        output_csv = rbind(First_pic[,-which(colnames(First_pic) %in% c("Timing","Slope.lm"))],
+                           Second_pic[,-which(colnames(Second_pic) %in% c("Timing","Slope.lm"))],
+                           Third_pic[,-which(colnames(Third_pic) %in% c("Timing","Slope.lm"))])
+      }else{
+        pulse_csv = merge(pulse_csv,melted_CSV,by="Timing")
+
+        output = rbind(First_pic[,-which(colnames(First_pic) %in% c("Timing","Slope.lm"))],
+                       Second_pic[,-which(colnames(Second_pic) %in% c("Timing","Slope.lm"))],
+                       Third_pic[,-which(colnames(Third_pic) %in% c("Timing","Slope.lm"))])
+
+      }
 
       output_csv = rbind(First_pic[,-which(colnames(First_pic) %in% c("Timing","Slope.lm"))],
                          Second_pic[,-which(colnames(Second_pic) %in% c("Timing","Slope.lm"))],
                          Third_pic[,-which(colnames(Third_pic) %in% c("Timing","Slope.lm"))])
-    }else{
-      pulse_csv = merge(pulse_csv,melted_CSV,by="Timing")
-
-      output = rbind(First_pic[,-which(colnames(First_pic) %in% c("Timing","Slope.lm"))],
-                     Second_pic[,-which(colnames(Second_pic) %in% c("Timing","Slope.lm"))],
-                     Third_pic[,-which(colnames(Third_pic) %in% c("Timing","Slope.lm"))])
 
     }
-
-    output_csv = rbind(First_pic[,-which(colnames(First_pic) %in% c("Timing","Slope.lm"))],
-                       Second_pic[,-which(colnames(Second_pic) %in% c("Timing","Slope.lm"))],
-                       Third_pic[,-which(colnames(Third_pic) %in% c("Timing","Slope.lm"))])
-
+  }else{
+    if(max(csv$Timing)<1100){
+      print("Error the experiment is not long enough !")
+    }
   }
 
   return(list(csv=csv,pulse_csv=pulse_csv))
@@ -321,7 +313,7 @@ Finding_pics =function(csv_input,exp_odorant = NULL){
 #' @export
 Z_score_calculation = function(pulse_csv){
   ### Melt the dataset ###
-  melted_csv= reshape2::melt(pulse_csv,id.vars = "Timing")
+  melted_csv= melt(pulse_csv,id.vars = "Timing")
 
   ### Formatting csv adding pulse information ###
   pulse = unique(sapply(strsplit(as.character(melted_csv$variable),"/"), `[`, 2))
@@ -350,9 +342,23 @@ Z_score_calculation = function(pulse_csv){
     left_join(z_mean,by = c("variable","conditions")) %>%
     mutate(z_score = (value-mean)/sd)
 
+  ### New max value for normal + z_score ###
+
+  # melted_csv = melted_csv %>% group_by(variable,pulse,conditions) %>% mutate(
+  #   value_max_pos = which.max(value),
+  #   zscore_max_pos = which.max(z_score))
+
+  melted_csv = melted_csv %>% group_by(variable,pulse,conditions) %>% mutate(
+    value_max_pos = (which.max(value[Timing>-10&Timing<50])-Timing[1]-9),
+    zscore_max_pos = (which.max(z_score[Timing>-10&Timing<50])-Timing[1]-9))
+
+  melted_csv = melted_csv %>% group_by(variable,pulse,conditions) %>% mutate(
+    max_value = mean(value[(unique(value_max_pos)-5):(unique(value_max_pos)+5)],na.rm=T),
+    max_zscore = mean(z_score[(unique(zscore_max_pos)-5):(unique(zscore_max_pos)+5)]),na.rm=T)
+
   ### add max value for normal + z_score ###
-  melted_csv = melted_csv %>% group_by(variable,pulse,conditions) %>% mutate(max_value = max(value),max_zscore = max(z_score))
-  melted_csv = melted_csv %>% group_by(variable,pulse,conditions) %>% mutate(mean_value = mean(value[Timing>-10&Timing<50]),mean_z_score = mean(z_score[Timing>-10&Timing<50]))
+  #melted_csv = melted_csv %>% group_by(variable,pulse,conditions) %>% mutate(max_value = max(value),max_zscore = max(z_score))
+  melted_csv = melted_csv %>% group_by(variable,pulse,conditions) %>% mutate(mean_value = mean(value[Timing>0&Timing<30]),mean_z_score = mean(z_score[Timing>-10&Timing<50]))
 
   return(melted_csv)
 }
@@ -376,6 +382,9 @@ Z_score_calculation = function(pulse_csv){
 #'
 #' @export
 PlotTrace = function(csv,combined = T,z_score = F) {
+  ### read exp_info to know how many flies by conditions ###
+  exp_info = Read_Exp_info()
+  num_antenna = exp_info$exp_info$Antennas
 
   if(combined){
     ### load correct data ###
@@ -397,7 +406,7 @@ PlotTrace = function(csv,combined = T,z_score = F) {
     csv$csv = csv$csv[,-c(ncol(csv$csv)-1,ncol(csv$csv))]
 
     ### Melt the dataset ###
-    melted_csv = reshape2::melt(csv$csv,id.vars = "Timing")
+    melted_csv = melt(csv$csv,id.vars = "Timing")
 
     ### Taking rid of long names to keep antenna id ###
     xtitle = unique(sapply(strsplit(as.character(melted_csv$variable),"[.]"), `[`, 2))
@@ -421,7 +430,7 @@ PlotTrace = function(csv,combined = T,z_score = F) {
                   #axis.ticks.y = element_blank(),
                   strip.text.y = element_text(angle = 0),
                   axis.title.x = element_text(size = 15, face="bold" ))+
-            facet_wrap_paginate(~ variable,ncol = 2,nrow = 3,page = p)
+            facet_wrap_paginate(~ variable,ncol = 2,nrow = ceiling(num_antenna/2),page = p)
     )
   }
 }
@@ -513,10 +522,10 @@ PlotResume = function(csv,groupby = "antenna",z_score = T){
 
   ### compute the maximum by each category ###
   if(z_score){
-    max_value_csv = melted_csv%>% group_by(variable,pulse,conditions) %>% summarize(max = max(z_score))
+    max_value_csv = melted_csv%>% group_by(variable,pulse,conditions) %>% summarize(max = max(max_zscore))
     ylabel = "Z score max"
   }else{
-    max_value_csv = melted_csv%>% group_by(variable,pulse,conditions) %>% summarize(max = max(value))
+    max_value_csv = melted_csv%>% group_by(variable,pulse,conditions) %>% summarize(max = max(max_value))
     ylabel = "normalized max"
   }
 
@@ -545,6 +554,196 @@ PlotResume = function(csv,groupby = "antenna",z_score = T){
   return(p1)
 }
 
+####################### Creating the plots #######################
+
+### 4 plot before cutting ###
+
+#' Plot of raw traces before do anything to compare with results
+#'
+#' @title plot_before_cutting
+#'
+#' @param raw raw table output of \code{\link{format_csv}}.
+#'
+#' @examples
+#' csv_split = Split_CSV(getwd())
+#' csv_DF = format_csv(csv=csv_split)
+#' plot_before_cutting(csv_DF$raw)
+#'
+#' @export
+plot_before_cutting = function(raw){
+  raw_new = melt(raw,id.vars = "Timing")
+
+  pdf("Plots/plot_before_cutting.pdf",width = 18,height = 15)
+  print(ggplot(raw_new,aes(Timing,value,col=variable))+
+          geom_line(size=0.1)+
+          ylab("fluo")+
+          theme(legend.position = "none"))
+
+  print(ggplot(raw_new,aes(Timing,value))+
+          geom_line(aes(color=variable),size=0.1)+
+          facet_grid(variable~., scales = "free")+
+          ylab("fluo")+
+          theme(legend.position = "none",
+                strip.text.y = element_blank()))
+  dev.off()
+}
+
+
+####################### Creating the plots #######################
+
+### 5 samescale summary plot ###
+
+#' Plot of raw traces before do anything to compare with results
+#'
+#' @title samescale_summary
+#'
+#' @param for_resume_final table output of \code{\link{pipeline}} or \code{\link{create_pdf}}
+#' @param without_water Default = False, if True will skip "water" odorants.
+#'
+#' @examples
+#' # All functions splited
+#' csv_split = Split_CSV(getwd())
+#' csv_DF = format_csv(csv=csv_split)
+#'
+#' for_resume_final = c()
+#' for(odor in exp_info$odorant){
+#'   for_resume = create_pdf(csv_DF,odor,z_score=T,name_file="odorant_1.pdf")
+#'   for_resume_final = rbind(for_resume_final,for_resume)
+#' }
+#' samescale_summary(for_resume_final)
+#'
+#' # All at once
+#' for_resume_final = pipeline(z_score=T)
+#' samescale_summary(for_resume_final)
+#'
+#'
+#' @export
+samescale_summary = function(for_resume_final,without_water=F){
+  ### Create short conditions names ###
+  cond_names =lapply(strsplit(as.character(levels(for_resume_final$conditions)),"[_]"), `[`, c(1,7,8))
+  short_cond_names = sapply(cond_names,function(x) paste(unlist(x, use.names = TRUE), collapse = "_"))
+  #levels(for_resume_final$conditions) = short_cond_names
+  for_resume_final$short_cond_names = for_resume_final$conditions
+  levels(for_resume_final$short_cond_names) = short_cond_names
+
+  ### Convert odorant to factor + change antenna names by their number only ###
+  for_resume_final$odorant = factor(for_resume_final$odorant,levels = unique(for_resume_final$odorant))
+  levels(for_resume_final$variable) = c(1:length(levels(for_resume_final$variable)))
+
+  ### eliminates duplicates ###
+  for_resume_final = unique(for_resume_final)
+
+  ### generate samescale plot ###
+  pdf("Plots/samescale_summary.pdf",width = 18,height = 15)
+  print(ggplot(for_resume_final,aes(short_cond_names,max_zscore,fill=short_cond_names))+
+          geom_boxplot()+
+          theme(axis.text.x = element_text(angle=45,hjust=1),
+                axis.title.x = element_blank(),
+                legend.title = element_blank(),
+                legend.position="bottom",
+                legend.direction="horizontal",
+                axis.text = element_text(size=20),
+                strip.text = element_text(size=20),
+                legend.text = element_text(size=20),
+                axis.title = element_text(size=20))+
+          facet_wrap(~ odorant,scales="free_x",nrow = 1)
+  )
+
+  plot_list = c()
+  max_value = max(for_resume_final$max_zscore)
+
+  for(i in 1:length(levels(for_resume_final$short_cond_names))){
+
+    ### create new df and add score column aka if double the mean of water 1 value = green color ###
+    df =for_resume_final[for_resume_final$short_cond_names == levels(for_resume_final$short_cond_names)[i],]
+    color = df %>% group_by(odorant,variable,short_cond_names) %>% mutate(Mean = mean(max_zscore,na.rm=T))
+    water_mean_sd = mean(color$Mean[grep("water",color$odorant)])+2*sd(color$Mean[grep("water",color$odorant)])
+    water_mean_sd_4 = mean(color$Mean[grep("water",color$odorant)])+4*sd(color$Mean[grep("water",color$odorant)])
+    color = color %>% mutate(score = as.factor(ifelse(Mean > water_mean_sd,
+                                                      ifelse(Mean >water_mean_sd_4,1,0.5),0)))
+    ### change max values as mean for waters ###
+    #color$max_zscore[grep("water",color$odorant)] = color$mean_z_score[grep("water",color$odorant)]
+
+
+    ### take out waters ###
+    if(without_water){
+      color = color[-grep("water",color$odorant),]
+    }
+
+
+    cols = c("0"="white","0.5"="yellow","1"="green")
+
+    if(i == 1){
+      p = ggplot(color,aes(variable,max_zscore,fill=score))+
+        geom_boxplot()+
+        ylab(levels(for_resume_final$short_cond_names)[i])+
+        scale_y_continuous(limits = c(-1,max_value))+
+        theme(axis.title.x = element_blank(),
+              axis.text = element_text(size=20),
+              strip.text = element_text(size=20),
+              legend.text = element_text(size=20),
+              axis.title = element_text(size=20),
+              legend.position = "none")+
+        facet_grid(~odorant,scales="free")+
+        scale_fill_manual(values = cols)
+    }else{
+      p = ggplot(color,aes(variable,max_zscore,fill=score))+
+        geom_boxplot()+
+        scale_y_continuous(limits = c(-1,max_value))+
+        ylab(levels(for_resume_final$short_cond_names)[i])+
+        theme(axis.title.x = element_blank(),
+              strip.background = element_blank(),
+              strip.text.x = element_blank(),
+              axis.text = element_text(size=20),
+              strip.text = element_text(size=20),
+              legend.text = element_text(size=20),
+              axis.title = element_text(size=20),
+              legend.position = "none")+
+        facet_grid(~odorant,scales="free")+
+        scale_fill_manual(values = cols)
+    }
+
+    plot_list = c(plot_list,list(p))
+  }
+
+  ### assemble together each condition plot
+  print(cowplot::plot_grid(plotlist = plot_list, nrow =length(levels(for_resume_final$short_cond_names)) ))
+
+  ### create diff from endogenous plot
+  endo_cond_name = levels(for_resume_final$short_cond_names)[grep("endo",levels(for_resume_final$short_cond_names),ignore.case = T)]
+  if(length(endo_cond_name)==0){
+
+  }else{
+    endo_normalized = for_resume_final %>% group_by(odorant) %>% mutate(fold_change = (max_zscore- max_zscore[short_cond_names == endo_cond_name])/max_zscore[short_cond_names == endo_cond_name])
+
+    stat.test = endo_normalized %>%
+      group_by(odorant) %>%
+      t_test(fold_change ~ short_cond_names, ref.group = endo_cond_name) %>%
+      adjust_pvalue(method = "bonferroni") %>%
+      add_significance()%>%
+      add_xy_position(x="short_cond_names")
+    print(endo_normalized$short_cond_names)
+
+    print(ggplot(endo_normalized,aes(x=short_cond_names,y=fold_change))+
+            geom_boxplot(aes(fill=short_cond_names))+
+            theme(axis.text.x = element_text(angle=45,hjust=1),
+                  axis.title.x = element_blank(),
+                  legend.title = element_blank(),
+                  legend.position="bottom",
+                  legend.direction="horizontal",
+                  axis.text = element_text(size=20),
+                  strip.text = element_text(size=20),
+                  legend.text = element_text(size=20),
+                  axis.title = element_text(size=20))+
+            facet_wrap(~ odorant,scales="free_x",nrow = 1)+
+            stat_pvalue_manual(stat.test,hide.ns = T)
+    )
+  }
+
+  dev.off()
+  return(for_resume_final)
+}
+
 ####################### Generating complete pipeline #######################
 
 #' Pipeline to generate a single PDF containing all plots doable with this package for 1 odor.
@@ -566,7 +765,7 @@ PlotResume = function(csv,groupby = "antenna",z_score = T){
 create_pdf = function(csv_DF,odorant,z_score = F,name_file){
 
   dataset = Finding_pics(csv_input = csv_DF$rolling_mean,exp_odorant = as.character(odorant))
-  dataset_normalized = Finding_pics(csv_input = csv_DF$normalized,exp_odorant = as.character(odorant))
+  dataset_normalized = Finding_pics(csv_input = csv_DF$normalized,exp_odorant = as.character(odorant),only_trace = T)
   dataset$pulse_csv = Z_score_calculation(dataset$pulse_csv)
 
   ### Create PDF ###
@@ -633,99 +832,121 @@ pipeline = function(z_score = F){
 
   }
 
-  ### Create short conditions names ###
-  cond_names =lapply(strsplit(as.character(levels(for_resume_final$conditions)),"[_]"), `[`, c(1,7,8))
-  short_cond_names = sapply(cond_names,function(x) paste(unlist(x, use.names = TRUE), collapse = "_"))
-  #levels(for_resume_final$conditions) = short_cond_names
-  for_resume_final$short_cond_names = for_resume_final$conditions
-  levels(for_resume_final$short_cond_names) = short_cond_names
+  plot_before_cutting(csv_DF$raw)
+  for_resume_return = samescale_summary(for_resume_final)
+  return(for_resume_return)
+}
 
-  ### Convert odorant to factor + change antenna names by their number only ###
-  for_resume_final$odorant = factor(for_resume_final$odorant,levels = unique(for_resume_final$odorant))
-  levels(for_resume_final$variable) = c(1:length(levels(for_resume_final$variable)))
+### Load exp_info into DB ###
+Export_exp_info = function(con){
+  exp_info = Read_Exp_info()$exp_info
+  exp_info_db = exp_info[,c("Exp_id","Conditions","Antennas","Odorant.Trials")]
+  names(exp_info_db) = c("exp_id","conditions","antennas","odorant_trials")
 
-  ### eliminates duplicates ###
-  for_resume_final = unique(for_resume_final)
+  dbAppendTable(con,"exp_info",exp_info_db)
 
-  ### generate samescale plot ###
-  pdf("Plots/samescale_summary.pdf",width = 18)
-  print(ggplot(for_resume_final,aes(short_cond_names,max_zscore,fill=short_cond_names))+
-          geom_boxplot()+
-          theme(axis.text.x = element_text(angle=45,hjust=1),
-                axis.title.x = element_blank(),
-                legend.title = element_blank(),
-                legend.position="bottom",
-                legend.direction="horizontal")+
-          facet_wrap(~ odorant,scales="free_x",nrow = 1)
-  )
+}
 
-  plot_list = c()
-  max_value = max(for_resume_final$max_zscore)
-  for(i in 1:length(levels(for_resume_final$short_cond_names))){
+### Load trial_info into DB ###
+Export_exp_info = function(con){
 
-    ### create new df and add score column aka if double the mean of water 1 value = green color ###
-    df =for_resume_final[for_resume_final$short_cond_names == levels(for_resume_final$short_cond_names)[i],]
-    color = df %>% group_by(odorant,variable,short_cond_names) %>% mutate(Mean = max(max_zscore))
-    water_mean = mean(color$Mean[color$odorant=="water 1"])
-    color = color %>% mutate(score = as.factor(ifelse(Mean > water_mean*2,1,0)))
-
-    if(i == 1){
-      p = ggplot(color,aes(variable,max_zscore,fill=score))+
-        geom_boxplot()+
-        ylab(levels(for_resume_final$short_cond_names)[i])+
-        scale_y_continuous(limits = c(0,max_value))+
-        theme(axis.title.x = element_blank(),
-              strip.text = element_text(size=7),
-              legend.position = "none")+
-        facet_grid(~odorant,scales="free")+
-        scale_fill_manual(values = c("white","green"))
-
-    }else{
-      p = ggplot(color,aes(variable,max_zscore,fill=score))+
-        geom_boxplot()+
-        scale_y_continuous(limits = c(0,max_value))+
-        ylab(levels(for_resume_final$short_cond_names)[i])+
-        theme(axis.title.x = element_blank(),
-              strip.text = element_text(size=5),
-              strip.background = element_blank(),
-              strip.text.x = element_blank(),
-              legend.position = "none")+
-        facet_grid(~odorant,scales="free")+
-        scale_fill_manual(values = c("white","green"))
+  exp_info = Read_Exp_info()$exp_info
+  trial_info =as.data.frame(t(exp_info[,grep("Trial.",colnames(exp_info),fixed = T)]))
+  names(trial_info)[1] = "odor"
+  query = dbSendQuery(con,paste0("SELECT * FROM raw_data WHERE exp_id = '",exp_info$Exp_id,"'"))
+  res = dbFetch(query)
+  i = 1
+  if(nrow(res)>0){
+    while(nrow(res)>0){
+      ### if id already present ###
+      i = i +1
+      print("raw_data already present")
+      exp_info_change = exp_info
+      exp_info_change$Exp_id = paste0(exp_info$Exp_id,"_",i)
+      query = dbSendQuery(con,paste0("SELECT * FROM raw_data WHERE exp_id = '",exp_info_change$Exp_id,"'"))
+      res = dbFetch(query)
     }
 
-    plot_list = c(plot_list,list(p))
+    ### Change Exp_info to get a new exp_id ###
+    write.csv(exp_info_change,"Exp_infos.csv",row.names = F)
+    exp_info = exp_info_change
   }
 
-  ### assemble together each condition plot
-  print(cowplot::plot_grid(plotlist = plot_list, nrow =length(levels(for_resume_final$short_cond_names)) ))
+  trial_info$exp_id = exp_info$Exp_id
+  trial_info$trial_id = paste(trial_info$exp_id,"trial",1:nrow(trial_info),sep = "_")
+  trial_info$dilution = ifelse(is.na(unlist(lapply(strsplit(trial_info$odor,"[_]"), `[`, 2))),
+                               3,
+                               unlist(lapply(strsplit(trial_info$odor,"[_]"), `[`, 2)))
+  trial_info$dilution = ifelse(lapply(strsplit(trial_info$dilution,"e"),`[`,1) == "", 3,
+                               unlist(lapply(strsplit(trial_info$dilution,"e"),`[`,1)))
+  trial_info$odor = unlist(lapply(strsplit(trial_info$odor,"[_]"), `[`, 1))
+  rownames(trial_info) = NULL
 
-  ### create diff from endogenous plot
-  endo_cond_name = levels(for_resume_final$short_cond_names)[grep("endo",levels(for_resume_final$short_cond_names),ignore.case = T)]
-  if(length(endo_cond_name)==0){
+  dbAppendTable(con,"trial_info",trial_info)
+  return(trial_info)
 
+}
+
+### Load condition_info into DB ###
+Export_condition_info = function(con){
+  exp_info = Read_Exp_info()$exp_info
+  condition_info =as.data.frame(t(exp_info[,grep("Condition.",colnames(exp_info),fixed = T)]))
+  names(condition_info)[1] = "transgene_name"
+  condition_info$exp_id = exp_info$Exp_id
+  condition_info$condition_id = paste(condition_info$exp_id,"cond",1:nrow(condition_info),sep = "_")
+  condition_info = condition_info[!is.na(condition_info$transgene_name),]
+  cond_names = t(as.data.frame(strsplit(condition_info$transgene_name,"[_]")))
+
+  condition_info = cbind(condition_info,cond_names)
+  names(condition_info)[4:ncol(condition_info)] = c("olfactory_receptor","promotor","driver","transgene","reporter","T2A","sex","age")
+
+  dbAppendTable(con,"conditions_info",condition_info)
+  return(condition_info)
+}
+
+### Load Formatted_data into DB ###
+Export_formatted_data = function(con,for_resume_final){
+  exp_info= Read_Exp_info()
+  formatted = for_resume_final
+
+  formatted$exp_id = exp_info$exp_id
+
+  ### cond_id
+  formatted$condition_id = formatted$conditions
+  levels(formatted$condition_id) = condition_info$condition_id[unlist(lapply(levels(formatted$condition_id), function(x)which(condition_info$transgene_name==x)))]
+
+  ### trial_id
+  formatted$trial_id = as.factor(unlist(lapply(strsplit(as.character(formatted$odorant),"[_]"), `[`, 1)))
+  levels(formatted$trial_id) = trial_info$trial_id[unlist(lapply(levels(formatted$trial_id), function(x)which(trial_info$odor==x)))]
+
+  ### antenna_id
+  formatted$antenna_id = paste0(formatted$exp_id,"_antenna_",formatted$variable)
+
+  ### pulse_id
+  formatted$pulse_id = paste0(formatted$antenna_id,
+                              "_pulse_",
+                              unlist(lapply(strsplit(as.character(formatted$pulse),"[_]"), `[`, 2)))
+
+  dbAppendTable(con,"formatted_data",formatted[,c("exp_id","condition_id","antenna_id","pulse_id","trial_id","max_zscore"),])
+}
+
+### Load Raw_data into DB ###
+Export_raw_data =function(con){
+  exp_info = Read_Exp_info()
+  query = dbSendQuery(con,paste0("SELECT * FROM raw_data WHERE exp_id = '",exp_info$exp_id,"'"))
+  res = dbFetch(query)
+  if(nrow(res)>0){
+    ### if id already present ###
+    print("raw_data already present")
   }else{
-    endo_normalized = for_resume_final %>% group_by(odorant) %>% mutate(fold_change = (max_zscore- max_zscore[short_cond_names == endo_cond_name])/max_zscore[short_cond_names == endo_cond_name])
+    raw = Split_CSV(getwd())
+    raw = cbind(exp_id = exp_info$exp_id,trial_id = NA, odorant = raw$odorant,raw[,-ncol(raw)])
 
-    stat.test = endo_normalized %>%
-      group_by(odorant) %>%
-      t_test(fold_change ~ short_cond_names, ref.group = endo_cond_name) %>%
-      adjust_pvalue(method = "bonferroni") %>%
-      add_significance()%>%
-      add_xy_position(x="short_cond_names")
+    ### trial_id
+    raw$trial_id = as.factor(unlist(lapply(strsplit(as.character(raw$odorant),"[_]"), `[`, 1)))
+    levels(raw$trial_id) = trial_info$trial_id[unlist(lapply(levels(raw$trial_id), function(x)which(trial_info$odor==x)))]
 
-    print(ggplot(endo_normalized,aes(short_cond_names,fold_change,color=short_cond_names))+
-            geom_boxplot()+
-            theme(axis.text.x = element_text(angle=45,hjust=1),
-                  axis.title.x = element_blank(),
-                  legend.title = element_blank(),
-                  legend.position="bottom",
-                  legend.direction="horizontal")+
-            facet_wrap(~ odorant,scales="free_x",nrow = 1)+
-            stat_pvalue_manual(stat.test,hide.ns = T)
-    )
+    dbAppendTable(con,"raw_data",raw)
   }
-
-  dev.off()
-  return(for_resume_final)
+  dbClearResult(query)
 }
