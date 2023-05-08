@@ -4,16 +4,16 @@
 \alias{format_csv}
 \title{format_csv}
 \usage{
-format_csv(csv_input, delta_F_dan = F)
+format_csv(csv_input)
 }
 \arguments{
-\item{csv_input}{table output of \code{\link{Split_CSV}}}
+\item{csv_input}{table output of \code{\link{Split_CSV}}.}
 }
 \description{
 normalize the dataset produced by Split_CSV
 }
 \examples{
-csv = Split_csv(getwd())
-df = format_csv(csv)
+csv_split = Split_csv(getwd())
+df = format_csv(csv_input = csv_split)
 
 }

@@ -7,9 +7,9 @@
 Split_CSV(directory, length_exp = 184)
 }
 \arguments{
-\item{directory}{Directory containing the raw data file}
+\item{directory}{Path to the raw csv file.}
 
-\item{length_exp}{The duration in seconds of a trial for a single odour}
+\item{length_exp}{The duration in seconds of a trial for a single odor.}
 }
 \description{
 add the odorant columns and change names of columns

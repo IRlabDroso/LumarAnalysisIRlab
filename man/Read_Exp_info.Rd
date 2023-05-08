@@ -7,7 +7,7 @@
 Read_Exp_info(file = NULL)
 }
 \arguments{
-\item{file}{A given file default is NULL and search in the current directory}
+\item{file}{Default = NULL, Path to the exp_info.csv file. If not specified search into the current directory.}
 }
 \description{
 Read the exp_info.csv file

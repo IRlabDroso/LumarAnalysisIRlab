@@ -2,7 +2,7 @@
 % Please edit documentation in R/Functions.R
 \name{Z_score_calculation}
 \alias{Z_score_calculation}
-\title{z_score_calculation}
+\title{Z_score_calculation}
 \usage{
 Z_score_calculation(pulse_csv)
 }

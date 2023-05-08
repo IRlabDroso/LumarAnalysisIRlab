@@ -19,7 +19,7 @@
 #'
 #' @title Read_Exp_info
 #'
-#' @param file A given file default is NULL and search in the current directory
+#' @param file Default = NULL, Path to the exp_info.csv file. If not specified search into the current directory.
 #'
 #' @examples
 #' exp.info = Read_Exp_info
@@ -51,8 +51,8 @@ Read_Exp_info = function(file=NULL){
 #'
 #' @title Split_CSV
 #'
-#' @param directory Directory containing the raw data file
-#' @param length_exp The duration in seconds of a trial for a single odour
+#' @param directory Path to the raw csv file.
+#' @param length_exp The duration in seconds of a trial for a single odor.
 #'
 #' @examples
 #' csv = Split_CSV(getwd())
@@ -117,14 +117,14 @@ Split_CSV = function(directory,length_exp = 184){
 #' @import tidyr
 #'
 #'
-#' @param csv_input table output of \code{\link{Split_CSV}}
+#' @param csv_input table output of \code{\link{Split_CSV}}.
 #'
 #' @examples
-#' csv = Split_csv(getwd())
-#' df = format_csv(csv)
+#' csv_split = Split_csv(getwd())
+#' df = format_csv(csv_input = csv_split)
 #'
 #' @export
-format_csv = function(csv_input,delta_F_dan = F){
+format_csv = function(csv_input){
 
   ### read csv ###
   exp.info = Read_Exp_info()
@@ -135,17 +135,9 @@ format_csv = function(csv_input,delta_F_dan = F){
   csv[,-1] = csv[,-1] / rowMeans(csv[,c(ncol(csv)-1,ncol(csv))]) #divide all the values by the mean of last two ROI aka foreheads ROI
 
   ### delta F ###
-  if(delta_F_dan){
-    ### Dan
-    mean_water1 = apply(csv[csv$Timing<=((csv$Timing[1]+(184/60))),-1],2,mean,na.rm=TRUE)
-    f = sweep(csv[,-1],2,mean_water1,"-")
-    DF = sweep(f,2,mean_water1,"/")
-  }else{
-    ### Dood
-    colmean = apply(csv[,-1],2,mean,na.rm=TRUE)
-    f = sweep(csv[,-1],2,colmean,"-")
-    DF = sweep(f,2,colmean,"/")
-  }
+  colmean = apply(csv[,-1],2,mean,na.rm=TRUE)
+  f = sweep(csv[,-1],2,colmean,"-")
+  DF = sweep(f,2,colmean,"/")
 
   melted = reshape2::melt(csv,id="Timing")
   melted = melted %>% group_by(variable) %>% mutate(ma=rollmean(as.numeric(value),25, align = "right", fill = NA))
@@ -179,6 +171,7 @@ format_csv = function(csv_input,delta_F_dan = F){
 }
 
 ####################### Finding pics ########################
+
 rollingSlope.lm <- function(vector) {
 
   a <- coef(lm(vector ~ seq(vector)))[2]
@@ -186,14 +179,14 @@ rollingSlope.lm <- function(vector) {
 
 }
 
-#' Find the pics in the data and supperpose them for 1 odorant
+#' Find the pics in the data and superpose them for 1 odorant
 #'
 #' @title Finding_pics
 #'
 #' @import rlang
 #'
-#' @param csv_input rolling_mean table output of \code{\link{format_csv}}
-#' @param exp_odorant A odorant name present in the csv_input
+#' @param csv_input rolling_mean table output of \code{\link{format_csv}}.
+#' @param exp_odorant An odorant name present in the csv_input.
 #'
 #' @examples
 #' csv_df = format_csv(csv)
@@ -367,6 +360,21 @@ Z_score_calculation = function(pulse_csv){
 ####################### Creating the plots #######################
 
 ### 1 First plots (plot_trace) for 1 odor ###
+
+#' plot the trace of fluorescence intensity raw or computed
+#'
+#' @title PlotTrace
+#'
+#' @param csv table output of \code{\link{Z_score_calculation}}.
+#' @param combined Default = True, Plot the trace uncut (False) or cut at each pulse and overlapped (True).
+#' @param z_score Default = False, plot the trace on a raw scale (False) or z score scale (True).
+#'
+#' @examples
+#' pics = Finding_pics(csv$rolling_mean, exp_odorant="water 1")
+#' pics$pulse_csv = z_score_calculation(pics$pulse_csv)
+#' PlotTrace(pics,combined=F,z_score=T)
+#'
+#' @export
 PlotTrace = function(csv,combined = T,z_score = F) {
 
   if(combined){
@@ -421,6 +429,20 @@ PlotTrace = function(csv,combined = T,z_score = F) {
 ####################### Creating the plots #######################
 ### 2 combined all antennas of same conditions ###
 
+#' plot the trace of fluorescence intensity overlapped for each conditions
+#'
+#' @title PlotTraceCondition
+#'
+#' @param csv table output of \code{\link{Z_score_calculation}}.
+#' @param groupBy Default = "pulse", color by pulse the overlapped traces ("pulse") or by antenna ID ("antenna").
+#' @param z_score Default = True, plot the trace on a raw scale (False) or z score scale (True).
+#'
+#' @examples
+#' pics = Finding_pics(csv$rolling_mean, exp_odorant="water 1")
+#' pics$pulse_csv = z_score_calculation(pics$pulse_csv)
+#' PlotTraceCondition(pics,groupBy="pulse",z_score=T)
+#'
+#' @export
 PlotTraceCondition = function(csv,groupBy = "pulse",z_score = T){
   ### load dataset ###
   melted_csv = csv$pulse_csv
@@ -470,6 +492,20 @@ PlotTraceCondition = function(csv,groupBy = "pulse",z_score = T){
 
 ### 3 resume all responses ###
 
+#' Resume plot with boxplots representing max values of each pulse for each antenna or condition
+#'
+#' @title PlotResume
+#'
+#' @param csv table output of \code{\link{Z_score_calculation}}.
+#' @param groupBy Default = "antenna", separate each antenna wrapped by conditions ("antenna"), If another string than antenna is given the global mean of each condition will be displayed.
+#' @param z_score Default = True, plot the trace on a raw scale (False) or z score scale (True).
+#'
+#' @examples
+#' pics = Finding_pics(csv$rolling_mean, exp_odorant="water 1")
+#' pics$pulse_csv = z_score_calculation(pics$pulse_csv)
+#' PlotResume(pics,groupBy="antenna",z_score=T)
+#'
+#' @export
 PlotResume = function(csv,groupby = "antenna",z_score = T){
 
   ### load dataset ###
@@ -511,6 +547,22 @@ PlotResume = function(csv,groupby = "antenna",z_score = T){
 
 ####################### Generating complete pipeline #######################
 
+#' Pipeline to generate a single PDF containing all plots doable with this package for 1 odor.
+#'
+#' @title create_pdf
+#'
+#' @param csv_DF table output of \code{\link{format_csv}}.
+#' @param odorant Corresponding odorant to generate the plots (Should be present in the exp_info.csv file).
+#' @param z_score Default = True, plot the trace on a raw scale (False) or z score scale (True).
+#' @param name_file File name of the PDF.
+#'
+#' @examples
+#' exp.info = Read_Exp_info()
+#' csv_split = Split_CSV(getwd())
+#' csv_DF = format_csv(csv=csv_split)
+#' create_pdf(csv_DF,exp.info$odorant[1],z_score = T,name_file="Odorant_1.pdf")
+#'
+#' @export
 create_pdf = function(csv_DF,odorant,z_score = F,name_file){
 
   dataset = Finding_pics(csv_input = csv_DF$rolling_mean,exp_odorant = as.character(odorant))
@@ -532,6 +584,17 @@ create_pdf = function(csv_DF,odorant,z_score = F,name_file){
   return(df = dataset$pulse_csv)
 }
 
+
+#' Pipeline to generate the complete analysis
+#'
+#' @title pipeline
+#'
+#' @param z_score Default = False, plot the trace on a raw scale (False) or z score scale (True).
+#'
+#' @examples
+#' pipeline(z_score=T)
+#'
+#' @export
 pipeline = function(z_score = F){
 
   ### load all datasets needed ###
