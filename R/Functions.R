@@ -841,8 +841,8 @@ pipeline = function(z_score = F){
 Export_exp_info = function(con){
 
   exp_info = Read_Exp_info()$exp_info
-  trial_info =as.data.frame(t(exp_info[,grep("Trial.",colnames(exp_info),fixed = T)]))
-  names(trial_info)[1] = "odor"
+  exp_info = exp_info[,c("Exp_id","Conditions","Antennas","Odorant.Trials")]
+  names(exp_info) = c("exp_id","conditions","antennas","odorant_trials")
   query = dbSendQuery(con,paste0("SELECT * FROM raw_data WHERE exp_id = '",exp_info$Exp_id,"'"))
   res = dbFetch(query)
   i = 1
@@ -862,6 +862,15 @@ Export_exp_info = function(con){
     exp_info = exp_info_change
   }
 
+  dbAppendTable(con,"exp_info",exp_info)
+}
+
+
+
+Export_trial_info = function(con){
+  exp_info = Read_Exp_info()$exp_info
+  trial_info =as.data.frame(t(exp_info[,grep("Trial.",colnames(exp_info),fixed = T)]))
+  names(trial_info)[1] = "odor"
   trial_info$exp_id = exp_info$Exp_id
   trial_info$trial_id = paste(trial_info$exp_id,"trial",1:nrow(trial_info),sep = "_")
   trial_info$dilution = ifelse(is.na(unlist(lapply(strsplit(trial_info$odor,"[_]"), `[`, 2))),
