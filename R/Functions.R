@@ -837,36 +837,38 @@ pipeline = function(z_score = F){
   return(for_resume_return)
 }
 
-### Load trial_info into DB ###
-Export_exp_info = function(con){
+### Load exp_info into DB ###
+Export_exp_info = function(con,new_entry =F){
 
   exp_info = Read_Exp_info()$exp_info
   exp_info = exp_info[,c("Exp_id","Conditions","Antennas","Odorant.Trials")]
   names(exp_info) = c("exp_id","conditions","antennas","odorant_trials")
-  query = dbSendQuery(con,paste0("SELECT * FROM raw_data WHERE exp_id = '",exp_info$Exp_id,"'"))
+  query = dbSendQuery(con,paste0("SELECT * FROM exp_info WHERE exp_id = '",exp_info$exp_id,"'"))
   res = dbFetch(query)
   i = 1
-  if(nrow(res)>0){
+  if(nrow(res)>0 & new_entry){
     while(nrow(res)>0){
       ### if id already present ###
       i = i +1
-      print("raw_data already present")
+      print("Exp id already exist")
       exp_info_change = exp_info
-      exp_info_change$Exp_id = paste0(exp_info$Exp_id,"_",i)
-      query = dbSendQuery(con,paste0("SELECT * FROM raw_data WHERE exp_id = '",exp_info_change$Exp_id,"'"))
+      exp_info_change$exp_id = paste0(exp_info$exp_id,"_",i)
+      query = dbSendQuery(con,paste0("SELECT * FROM exp_info WHERE exp_id = '",exp_info_change$exp_id,"'"))
       res = dbFetch(query)
     }
 
     ### Change Exp_info to get a new exp_id ###
-    write.csv(exp_info_change,"Exp_infos.csv",row.names = F)
+    exp_info_write = Read_Exp_info()$exp_info
+    exp_info_write$Exp_id = exp_info_change$exp_id
+    write.csv(exp_info_write,"Exp_infos.csv",row.names = F)
     exp_info = exp_info_change
+  }else{
   }
 
   dbAppendTable(con,"exp_info",exp_info)
 }
 
-
-
+### Load trial_info into DB ###
 Export_trial_info = function(con){
   exp_info = Read_Exp_info()$exp_info
   trial_info =as.data.frame(t(exp_info[,grep("Trial.",colnames(exp_info),fixed = T)]))
