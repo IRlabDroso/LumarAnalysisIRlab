@@ -837,16 +837,6 @@ pipeline = function(z_score = F){
   return(for_resume_return)
 }
 
-### Load exp_info into DB ###
-Export_exp_info = function(con){
-  exp_info = Read_Exp_info()$exp_info
-  exp_info_db = exp_info[,c("Exp_id","Conditions","Antennas","Odorant.Trials")]
-  names(exp_info_db) = c("exp_id","conditions","antennas","odorant_trials")
-
-  dbAppendTable(con,"exp_info",exp_info_db)
-
-}
-
 ### Load trial_info into DB ###
 Export_exp_info = function(con){
 
