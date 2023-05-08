@@ -36,6 +36,15 @@ PlotResume(odor_1,groupBy="",z_score=T)
 #### Run all at once ####
 setwd("path/to/your/exp_info.csv+raw.csv")
 pipeline(z_score=T)
+```
+## Testing 
+
+For testing purposing we included mock data to make run the package and understand the outputs. The data is accessible in the `data/.` folder. The data contain a fake experiment 
+where 3 odorant (Cider, Acetophenone, Hexanal) as been tested on 3 different olfactory receptors (OR1, OR2, OR3). To test the package with this data this how to proceed: Firstly download both `.csv` files. Then execute the next script: 
+```R
+csv_split = Split_CSV(Path
+
 
 ```
+
 
