@@ -894,12 +894,13 @@ Export_condition_info = function(con){
   condition_info =as.data.frame(t(exp_info[,grep("Condition.",colnames(exp_info),fixed = T)]))
   names(condition_info)[1] = "transgene_name"
   condition_info$exp_id = exp_info$Exp_id
+  condition_info$remarks = unlist(lapply(strsplit(unlist(strsplit(exp_info$Remarks,"/")),"cond_[1-9]_"), `[`, 2))
   condition_info$condition_id = paste(condition_info$exp_id,"cond",1:nrow(condition_info),sep = "_")
   condition_info = condition_info[!is.na(condition_info$transgene_name),]
   cond_names = t(as.data.frame(strsplit(condition_info$transgene_name,"[_]")))
 
   condition_info = cbind(condition_info,cond_names)
-  names(condition_info)[4:ncol(condition_info)] = c("olfactory_receptor","promotor","driver","transgene","reporter","T2A","sex","age")
+  names(condition_info)[5:ncol(condition_info)] = c("olfactory_receptor","promotor","driver","transgene","reporter","T2A","sex","age")
 
   dbAppendTable(con,"conditions_info",condition_info)
   return(condition_info)
