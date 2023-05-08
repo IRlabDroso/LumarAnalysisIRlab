@@ -1,14 +1,13 @@
 Package: LumarAnalysisIrlab
 Type: Package
-Title: What the Package Does (Title Case)
+Title: Package to analyze fluorescent data
 Version: 0.1.0
-Author: Who wrote it
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
-License: What license is it under?
+Author: Dan Celestini
+Maintainer: The package maintainer <dan.celestini@etu.unige.ch>
+Description: Analysing fluorescent data comming from a lumar microscope. Different parameters
+could be apply. Packages speciallized in odorant testing response of olfactory receptors. 
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.2.3
 Depends: 
-    dplyr, zoo, tidyr, ggplot2, rlang, ggforce, tidyverse, rstatix, ggpubr
+    dplyr, zoo, tidyr, ggplot2, rlang, ggforce, tidyverse, rstatix, ggpubr, reshape2
