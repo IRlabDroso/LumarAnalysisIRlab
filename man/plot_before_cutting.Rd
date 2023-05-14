@@ -4,10 +4,12 @@
 \alias{plot_before_cutting}
 \title{plot_before_cutting}
 \usage{
-plot_before_cutting(raw)
+plot_before_cutting(raw = NULL)
 }
 \arguments{
 \item{raw}{raw table output of \code{\link{format_csv}}.}
+
+\item{alone}{Default = False, To make the plot alone without running all the code}
 }
 \description{
 Plot of raw traces before do anything to compare with results

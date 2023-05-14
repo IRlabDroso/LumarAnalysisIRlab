@@ -298,7 +298,7 @@ Finding_pics =function(csv_input,exp_odorant = NULL,only_trace = F){
   }
 
   if(!only_trace & max(csv$Timing)>1100 ){
-    computed_pics = apply(csv[,2:(ncol(csv)-2)], 2, function(x)as.data.frame(acf_computation(x,csv,pulse_csv)))
+    computed_pics = apply(csv[,2:(ncol(csv)-2)], 2, function(x)as.data.frame(acf_computation(x,csv)))
     pulse_csv = reduce(computed_pics,left_join,by="Timing")
 
   }else{
@@ -586,6 +586,7 @@ PlotResume = function(csv,groupby = "antenna",z_score = T){
 #' @title plot_before_cutting
 #'
 #' @param raw raw table output of \code{\link{format_csv}}.
+#' @param alone Default = False, To make the plot alone without running all the code
 #'
 #' @examples
 #' csv_split = Split_CSV(getwd())
@@ -593,7 +594,13 @@ PlotResume = function(csv,groupby = "antenna",z_score = T){
 #' plot_before_cutting(csv_DF$raw)
 #'
 #' @export
-plot_before_cutting = function(raw){
+plot_before_cutting = function(raw=NULL){
+
+  if(is.null(raw)){
+    raw = Split_CSV(getwd())
+  }
+  raw = raw[,-c((ncol(raw)-1):ncol(raw))]
+
   raw_new = melt(raw,id.vars = "Timing")
 
   pdf("Plots/plot_before_cutting.pdf",width = 18,height = 15)
@@ -865,7 +872,7 @@ pipeline = function(z_score = F){
 
   }
 
-  plot_before_cutting(csv_DF$raw)
+  plot_before_cutting(csv)
   for_resume_return = samescale_summary(for_resume_final)
   return(for_resume_return)
 }

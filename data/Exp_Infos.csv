@@ -1,2 +1,2 @@
 Exp_id,Conditions,Condition 1,Condition 2,Condition 3,Condition4,Antennas,Odorant Trials,Trial 1,Trial 2,Trial 3,Trial 4,Trial 5,Trial 6,Trial 7,Remarks
-1_08052023,3,OR1_ORCO_Transgene_Gal4_GCaMP7f_F_F_3,OR2_ORCO_Transgene_Gal4_GCaMP7f_F_M_3,OR3_ORCO_Transgene_Gal4_GCaMP7f_F_M_3,NA,6,7,water 1,Cider_e3,water 2,Acetophenone_e3,water 3,Hexanal_e3,water 4,cond_1_test/cond_2_/cond_3_/
+1_08052023,3,OR1_test_test_test_test_F_F_3,OR2_ORCO_test_test_test_F_M_3,OR3_test_test_test_test_F_M_3,NA,6,7,water 1,Odor 1_e3,water 2,Odor 2_e3,water 3,Odor 3_e3,water 4,cond_1_remark 1/cond_2_ remark 2/cond_3_remark 3/
