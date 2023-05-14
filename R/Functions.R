@@ -164,6 +164,101 @@ rollingSlope.lm <- function(vector) {
 
 }
 
+#' Function to determine where the pulse occurs in the traces (internal function of \code{\link{Finding_pics}})
+#'
+#' @title acf_computation
+#'
+#' @param csv_complete rolling_mean table output of \code{\link{format_csv}}.
+#' @param csv A single column of the csv_complete (given by apply())
+#'
+#' @examples
+#' csv_df = format_csv(csv)
+#'
+#' ### Load csv and modify it ###
+#' csv = csv_df[csv_df$odorant == "water 1",]
+#' csv = csv[,-c(ncol(csv))]
+#' csv[,-c(1,ncol(csv))] = as.data.frame(scale(csv[,-c(1,ncol(csv))],scale = F))
+#' csv$Timing = rank(csv$Timing)
+#'
+#' ### compute acf ###
+#' computed_pics = apply(csv[,2:(ncol(csv)-2)], 2, function(x)as.data.frame(acf_computation(x,csv)))
+#' pulse_csv = reduce(computed_pics,left_join,by="Timing")
+#'
+#' @export
+acf_computation = function(csv,csv_complete){
+
+  i = 2
+  time_csv = csv_complete[,1]
+  csv = as.data.frame(cbind(Timing = time_csv,csv))
+  colnames(csv)[2]= colnames(csv_complete[which(csv_complete[100,] == csv[100,2])])
+  name_antenna =colnames(csv)[2]
+
+  no_response = T# to know if we have a response for this odor or not
+
+  ### Finding the max autocorelation for the first pics ###
+  ACF = acf(csv[,i],pl=F,lag = 500)
+  ACF = as.data.frame(cbind(ACF$lag,ACF$acf))
+
+  # Find the max value
+  max_1 = which(ACF$V2 == max(ACF$V2[ACF$V1>380]))
+  if(max_1 < 380 | max(ACF$V2[ACF$V1>380]) < 0.35){
+    no_response = T
+    # 409 = 184 / 60 / 3 / 0.0025 aka how much frame are in each pulse test
+    max_1 = 409 #default value that seems to works properly, This is used only for no response signals so don't care much
+  }
+
+  ### Finding the max autocorelation for the second and third pics ###
+  ACF = acf(csv[csv$Timing>csv$Timing[max_1],i],pl=F,lag = 500)
+  ACF = as.data.frame(cbind(ACF$lag,ACF$acf))
+  max_2 = which(ACF$V2 == max(ACF$V2[ACF$V1>100]))
+
+  if(max_2 < 380 | max(ACF$V2[ACF$V1>380]) < 0.35){
+    # 409 = 184 / 60 / 3 / 0.0025 aka how much frame are in each pulse test
+    no_response = T
+    max_2 = 409 #default value that seems to works properly, This is used only for no response signals so don't care much
+  }
+
+  First_pic = csv[csv$Timing<=csv$Timing[max_1],]
+  Second_pic = csv[csv$Timing>csv$Timing[max_1] & csv$Timing<=csv$Timing[(max_1+max_2)],]
+  Third_pic = csv[csv$Timing>csv$Timing[(max_1+max_2)],]
+
+  ### Calculate rolling slope for each pulse ###
+  First_pic = First_pic %>%mutate(Slope.lm = First_pic[[name_antenna]])%>% mutate(Slope.lm = rollapply(Slope.lm, width=10, FUN=rollingSlope.lm, fill=NA))
+  Second_pic = Second_pic %>%mutate(Slope.lm = Second_pic[[name_antenna]])%>% mutate(Slope.lm = rollapply(Slope.lm, width=10, FUN=rollingSlope.lm, fill=NA))
+  Third_pic = Third_pic %>%mutate(Slope.lm = Third_pic[[name_antenna]])%>% mutate(Slope.lm = rollapply(Slope.lm, width=10, FUN=rollingSlope.lm, fill=NA))
+
+  ### Find the max slope and set as 0 to synchronize the pulses ###
+  if(no_response){#theory should be each 409
+    First_pic$Timing = First_pic$Timing - First_pic$Timing[(nrow(First_pic)/2)]
+    Second_pic$Timing = Second_pic$Timing - Second_pic$Timing[(nrow(Second_pic)/2)]
+    Third_pic$Timing = Third_pic$Timing - Third_pic$Timing[(nrow(Third_pic)/2)]
+  }else{
+    First_pic$Timing = First_pic$Timing - First_pic$Timing[which.max(First_pic$Slope.lm)]
+    Second_pic$Timing = Second_pic$Timing - Second_pic$Timing[which.max(Second_pic$Slope.lm)]
+    Third_pic$Timing = Third_pic$Timing - Third_pic$Timing[which.max(Third_pic$Slope.lm)]
+  }
+
+
+  ### Normalize the values with new 0 as reference ###
+  First_0 = which(First_pic$Timing==0)
+  Second_0 = which(Second_pic$Timing==0)
+  Third_0 = which(Third_pic$Timing==0)
+  First_pic[,i] = First_pic[,i] - mean(First_pic[(First_0-15):(First_0-2),i])
+  Second_pic[,i] = Second_pic[,i] - mean(Second_pic[(Second_0-15):(Second_0-2),i])
+  Third_pic[,i] = Third_pic[,i] - mean(Third_pic[(Third_0-15):(Third_0-2),i])
+
+
+  ### Merge pics + create a melted DF ###
+  dfs = list(First_pic[,c("Timing",name_antenna)],Second_pic[,c("Timing",name_antenna)],Third_pic[,c("Timing",name_antenna)])
+
+  melted_CSV = Reduce(function(x,y) merge(x,y,by="Timing"),dfs)
+  colnames(melted_CSV) = c("Timing",paste(name_antenna,c("pic_1","pic_2","pic_3"),no_response,sep = "/"))#use "/" to split in next function
+
+  ### return the merged CSV  ###
+
+  return(melted_CSV)
+}
+
 #' Find the pics in the data and superpose them for 1 odorant
 #'
 #' @title Finding_pics
@@ -202,93 +297,10 @@ Finding_pics =function(csv_input,exp_odorant = NULL,only_trace = F){
     }
   }
 
-  if(!only_trace){# to not go into the big loop when just need to cut it and rank it usefull for create_pdf func
-    for(i in 2:(ncol(csv)-2)){
-      name_antenna = colnames(csv)[i]
+  if(!only_trace & max(csv$Timing)>1100 ){
+    computed_pics = apply(csv[,2:(ncol(csv)-2)], 2, function(x)as.data.frame(acf_computation(x,csv,pulse_csv)))
+    pulse_csv = reduce(computed_pics,left_join,by="Timing")
 
-      no_response = T# to know if we have a response for this odor or not
-
-      ### Finding the max autocorelation for the first pics ###
-      ACF = acf(csv[,i],pl=F,lag = 500)
-      ACF = as.data.frame(cbind(ACF$lag,ACF$acf))
-
-      # Find the max value
-      max_1 = which(ACF$V2 == max(ACF$V2[ACF$V1>380]))
-      if(max_1 < 380 | max(ACF$V2[ACF$V1>380]) < 0.35){
-        no_response = T
-        # 409 = 184 / 60 / 3 / 0.0025 aka how much frame are in each pulse test
-        max_1 = 409 #default value that seems to works properly, This is used only for no response signals so don't care much
-      }
-
-      ### Finding the max autocorelation for the second and third pics ###
-      ACF = acf(csv[csv$Timing>csv$Timing[max_1],i],pl=F,lag = 500)
-      ACF = as.data.frame(cbind(ACF$lag,ACF$acf))
-      max_2 = which(ACF$V2 == max(ACF$V2[ACF$V1>100]))
-
-      if(max_2 < 380 | max(ACF$V2[ACF$V1>380]) < 0.35){
-        # 409 = 184 / 60 / 3 / 0.0025 aka how much frame are in each pulse test
-        no_response = T
-        max_2 = 409 #default value that seems to works properly, This is used only for no response signals so don't care much
-      }
-
-      First_pic = csv[csv$Timing<=csv$Timing[max_1],]
-      Second_pic = csv[csv$Timing>csv$Timing[max_1] & csv$Timing<=csv$Timing[(max_1+max_2)],]
-      Third_pic = csv[csv$Timing>csv$Timing[(max_1+max_2)],]
-
-      ### Calculate rolling slope for each pulse ###
-      First_pic = First_pic %>%mutate(Slope.lm = First_pic[[name_antenna]])%>% mutate(Slope.lm = rollapply(Slope.lm, width=10, FUN=rollingSlope.lm, fill=NA))
-      Second_pic = Second_pic %>%mutate(Slope.lm = Second_pic[[name_antenna]])%>% mutate(Slope.lm = rollapply(Slope.lm, width=10, FUN=rollingSlope.lm, fill=NA))
-      Third_pic = Third_pic %>%mutate(Slope.lm = Third_pic[[name_antenna]])%>% mutate(Slope.lm = rollapply(Slope.lm, width=10, FUN=rollingSlope.lm, fill=NA))
-
-      ### Find the max slope and set as 0 to synchronize the pulses ###
-      if(no_response){#theory should be each 409
-        First_pic$Timing = First_pic$Timing - First_pic$Timing[(nrow(First_pic)/2)]
-        Second_pic$Timing = Second_pic$Timing - Second_pic$Timing[(nrow(Second_pic)/2)]
-        Third_pic$Timing = Third_pic$Timing - Third_pic$Timing[(nrow(Third_pic)/2)]
-      }else{
-        First_pic$Timing = First_pic$Timing - First_pic$Timing[which.max(First_pic$Slope.lm)]
-        Second_pic$Timing = Second_pic$Timing - Second_pic$Timing[which.max(Second_pic$Slope.lm)]
-        Third_pic$Timing = Third_pic$Timing - Third_pic$Timing[which.max(Third_pic$Slope.lm)]
-      }
-
-
-      ### Normalize the values with new 0 as reference ###
-      First_0 = which(First_pic$Timing==0)
-      Second_0 = which(Second_pic$Timing==0)
-      Third_0 = which(Third_pic$Timing==0)
-      First_pic[,i] = First_pic[,i] - mean(First_pic[(First_0-15):(First_0-2),i])
-      Second_pic[,i] = Second_pic[,i] - mean(Second_pic[(Second_0-15):(Second_0-2),i])
-      Third_pic[,i] = Third_pic[,i] - mean(Third_pic[(Third_0-15):(Third_0-2),i])
-
-
-      ### Merge pics + create a melted DF ###
-      dfs = list(First_pic[,c("Timing",name_antenna)],Second_pic[,c("Timing",name_antenna)],Third_pic[,c("Timing",name_antenna)])
-
-      melted_CSV = Reduce(function(x,y) merge(x,y,by="Timing"),dfs)
-      colnames(melted_CSV) = c("Timing",paste(name_antenna,c("pic_1","pic_2","pic_3"),sep = "/"))#use "/" to split in next function
-      melted_CSV_long = melt(melted_CSV,id.vars = "Timing")
-
-      ### return the merged CSV + combined scaled pics csv ###
-      if(is_empty(pulse_csv)){#if first antenna
-        pulse_csv = melted_CSV
-
-        output_csv = rbind(First_pic[,-which(colnames(First_pic) %in% c("Timing","Slope.lm"))],
-                           Second_pic[,-which(colnames(Second_pic) %in% c("Timing","Slope.lm"))],
-                           Third_pic[,-which(colnames(Third_pic) %in% c("Timing","Slope.lm"))])
-      }else{
-        pulse_csv = merge(pulse_csv,melted_CSV,by="Timing")
-
-        output = rbind(First_pic[,-which(colnames(First_pic) %in% c("Timing","Slope.lm"))],
-                       Second_pic[,-which(colnames(Second_pic) %in% c("Timing","Slope.lm"))],
-                       Third_pic[,-which(colnames(Third_pic) %in% c("Timing","Slope.lm"))])
-
-      }
-
-      output_csv = rbind(First_pic[,-which(colnames(First_pic) %in% c("Timing","Slope.lm"))],
-                         Second_pic[,-which(colnames(Second_pic) %in% c("Timing","Slope.lm"))],
-                         Third_pic[,-which(colnames(Third_pic) %in% c("Timing","Slope.lm"))])
-
-    }
   }else{
     if(max(csv$Timing)<1100){
       print("Error the experiment is not long enough !")
@@ -372,21 +384,22 @@ Z_score_calculation = function(pulse_csv){
 #' @title PlotTrace
 #'
 #' @param csv table output of \code{\link{Z_score_calculation}}.
+#' @param computed Default =Truem, Plot the computed trace (normalized,scaled & z-score) or raw data
 #' @param combined Default = True, Plot the trace uncut (False) or cut at each pulse and overlapped (True).
 #' @param z_score Default = False, plot the trace on a raw scale (False) or z score scale (True).
 #'
 #' @examples
 #' pics = Finding_pics(csv$rolling_mean, exp_odorant="water 1")
 #' pics$pulse_csv = z_score_calculation(pics$pulse_csv)
-#' PlotTrace(pics,combined=F,z_score=T)
+#' PlotTrace(pics,computed=T,combined=F,z_score=T)
 #'
 #' @export
-PlotTrace = function(csv,combined = T,z_score = F) {
+PlotTrace = function(csv,computed=T,combined = T,z_score = F) {
   ### read exp_info to know how many flies by conditions ###
   exp_info = Read_Exp_info()
   num_antenna = exp_info$exp_info$Antennas
 
-  if(combined){
+  if(computed){
     ### load correct data ###
     melted_csv = csv$pulse_csv
 
@@ -395,9 +408,19 @@ PlotTrace = function(csv,combined = T,z_score = F) {
 
     ### create ggplot ###
     if(z_score){
-      p1 = ggplot(melted_csv,aes(Timing,z_score,col=pulse))
+      if(combined){
+        p1 = ggplot(melted_csv,aes(Timing,z_score,col=pulse))
+      }else{
+        melted_csv = melted_csv %>% group_by(variable) %>% mutate(Timing = index(Timing))
+        p1 = ggplot(melted_csv,aes(Timing,z_score))
+      }
     }else{
-      p1 = ggplot(melted_csv,aes(Timing,value,col=pulse))
+      if(combined){
+        p1 = ggplot(melted_csv,aes(Timing,value,col=pulse))
+      }else{
+        melted_csv = melted_csv %>% group_by(variable) %>% mutate(Timing = index(Timing))
+        p1 = ggplot(melted_csv,aes(Timing,value))
+      }
     }
 
 
@@ -626,6 +649,10 @@ samescale_summary = function(for_resume_final,without_water=F){
   for_resume_final$short_cond_names = for_resume_final$conditions
   levels(for_resume_final$short_cond_names) = short_cond_names
 
+  ### get the remarks is some exist ###
+  exp.info = Read_Exp_info()$exp_info
+  remarks = unlist(lapply(strsplit(unlist(strsplit(exp.info$Remarks,"[/]")),"cond_[1-9]_"), `[`, 2))
+
   ### Convert odorant to factor + change antenna names by their number only ###
   for_resume_final$odorant = factor(for_resume_final$odorant,levels = unique(for_resume_final$odorant))
   levels(for_resume_final$variable) = c(1:length(levels(for_resume_final$variable)))
@@ -644,6 +671,8 @@ samescale_summary = function(for_resume_final,without_water=F){
                 legend.direction="horizontal",
                 axis.text = element_text(size=20),
                 strip.text = element_text(size=20),
+                strip.text.x = element_text(angle=45),
+                strip.background = element_blank(),
                 legend.text = element_text(size=20),
                 axis.title = element_text(size=20))+
           facet_wrap(~ odorant,scales="free_x",nrow = 1)
@@ -664,7 +693,6 @@ samescale_summary = function(for_resume_final,without_water=F){
     ### change max values as mean for waters ###
     #color$max_zscore[grep("water",color$odorant)] = color$mean_z_score[grep("water",color$odorant)]
 
-
     ### take out waters ###
     if(without_water){
       color = color[-grep("water",color$odorant),]
@@ -676,11 +704,13 @@ samescale_summary = function(for_resume_final,without_water=F){
     if(i == 1){
       p = ggplot(color,aes(variable,max_zscore,fill=score))+
         geom_boxplot()+
-        ylab(levels(for_resume_final$short_cond_names)[i])+
+        ylab(paste(levels(for_resume_final$short_cond_names)[i],remarks[i],sep="\n"))+
         scale_y_continuous(limits = c(-1,max_value))+
         theme(axis.title.x = element_blank(),
               axis.text = element_text(size=20),
               strip.text = element_text(size=20),
+              strip.text.x = element_text(angle=45),
+              strip.background = element_blank(),
               legend.text = element_text(size=20),
               axis.title = element_text(size=20),
               legend.position = "none")+
@@ -690,7 +720,7 @@ samescale_summary = function(for_resume_final,without_water=F){
       p = ggplot(color,aes(variable,max_zscore,fill=score))+
         geom_boxplot()+
         scale_y_continuous(limits = c(-1,max_value))+
-        ylab(levels(for_resume_final$short_cond_names)[i])+
+        ylab(paste(levels(for_resume_final$short_cond_names)[i],remarks[i],sep="\n"))+
         theme(axis.title.x = element_blank(),
               strip.background = element_blank(),
               strip.text.x = element_blank(),
@@ -707,7 +737,7 @@ samescale_summary = function(for_resume_final,without_water=F){
   }
 
   ### assemble together each condition plot
-  print(cowplot::plot_grid(plotlist = plot_list, nrow =length(levels(for_resume_final$short_cond_names)) ))
+  print(cowplot::plot_grid(plotlist = plot_list ,nrow =length(levels(for_resume_final$short_cond_names)),rel_heights = c(1,.7,.7) ))
 
   ### create diff from endogenous plot
   endo_cond_name = levels(for_resume_final$short_cond_names)[grep("endo",levels(for_resume_final$short_cond_names),ignore.case = T)]
@@ -733,6 +763,8 @@ samescale_summary = function(for_resume_final,without_water=F){
                   legend.direction="horizontal",
                   axis.text = element_text(size=20),
                   strip.text = element_text(size=20),
+                  strip.text.x = element_text(angle=45),
+                  strip.background = element_blank(),
                   legend.text = element_text(size=20),
                   axis.title = element_text(size=20))+
             facet_wrap(~ odorant,scales="free_x",nrow = 1)+
@@ -770,8 +802,9 @@ create_pdf = function(csv_DF,odorant,z_score = F,name_file){
 
   ### Create PDF ###
   pdf(name_file)
-  PlotTrace(csv = dataset_normalized,combined = F,z_score = z_score)
-  PlotTrace(csv = dataset,combined = T,z_score = z_score)
+  PlotTrace(csv = dataset_normalized,computed=F, combined = F,z_score = z_score)
+  PlotTrace(csv = dataset,computed=T, combined = F,z_score = z_score)
+  PlotTrace(csv = dataset,computed=T, combined = T,z_score = z_score)
   PlotTraceCondition(csv=dataset,groupBy = "pulse",z_score = z_score)
   PlotTraceCondition(csv=dataset,groupBy = "antenna",z_score = z_score)
   res_antenna = PlotResume(csv=dataset,groupby = "antenna",z_score = z_score)
