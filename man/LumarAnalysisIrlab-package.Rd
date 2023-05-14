@@ -4,8 +4,8 @@
 \name{LumarAnalysisIrlab-package}
 \alias{LumarAnalysisIrlab}
 \alias{LumarAnalysisIrlab-package}
-\title{LumarAnalysisIrlab: What the Package Does (Title Case)}
+\title{LumarAnalysisIrlab: Package to analyze fluorescent data}
 \description{
-More about what it does (maybe more than one line) Use four spaces when indenting paragraphs within the Description.
+Analysing fluorescent data comming from a lumar microscope. Different parameters could be apply. Packages speciallized in odorant testing response of olfactory receptors.
 }
 \keyword{internal}

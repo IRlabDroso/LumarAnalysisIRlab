@@ -4,10 +4,12 @@
 \alias{PlotTrace}
 \title{PlotTrace}
 \usage{
-PlotTrace(csv, combined = T, z_score = F)
+PlotTrace(csv, computed = T, combined = T, z_score = F)
 }
 \arguments{
 \item{csv}{table output of \code{\link{Z_score_calculation}}.}
+
+\item{computed}{Default =Truem, Plot the computed trace (normalized,scaled & z-score) or raw data}
 
 \item{combined}{Default = True, Plot the trace uncut (False) or cut at each pulse and overlapped (True).}
 
@@ -19,6 +21,6 @@ plot the trace of fluorescence intensity raw or computed
 \examples{
 pics = Finding_pics(csv$rolling_mean, exp_odorant="water 1")
 pics$pulse_csv = z_score_calculation(pics$pulse_csv)
-PlotTrace(pics,combined=F,z_score=T)
+PlotTrace(pics,computed=T,combined=F,z_score=T)
 
 }
