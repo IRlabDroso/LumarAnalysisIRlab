@@ -39,11 +39,17 @@ pipeline(z_score=T)
 ```
 ## Testing 
 
-For testing purposing we included mock data to make run the package and understand the outputs. The data is accessible in the `data/.` folder. The data contain a fake experiment 
-where 3 odorant (Cider, Acetophenone, Hexanal) as been tested on 3 different olfactory receptors (OR1, OR2, OR3). To test the package with this data this how to proceed: Firstly download both `.csv` files. Then execute the next script: 
+For testing purposing we included mock data to make run the package and understand the outputs. The data is accessible in the `data/.` folder or calling it directly in R with `data()` function. The data contain a fake experiment where 3 odors as been tested on 3 different olfactory receptors (OR1, OR2, OR3). To test the package with this data this how to proceed:
 ```R
-csv_split = Split_CSV(Path
+library(LumarAnalysisIRlab)
+setwd("Path/to/new/directory/")
+data(Exp_infos)
+data(raw_data_mock)
 
+write.csv(exp_info,file="Exp_Infos.csv",row.names=F)
+write.csv(raw,file="raw_data_mock.csv",row.names=F)
+
+pipeline(z_score=T)
 
 ```
 
