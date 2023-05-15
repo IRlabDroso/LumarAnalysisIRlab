@@ -25,13 +25,13 @@ csv_DF = format_csv(csv_input = csv_split)
 odor_1 = Finding_pics(csv_DF$rolling_mean, exp_odorant="water 1")
 
 # Compute z score on dataset
-odor_1$pulse_csv = z_score_calculation(odor_1$pulse_csv)
+odor_1$pulse_csv = Z_score_calculation(odor_1$pulse_csv)
 
 # Generate all the plots
 PlotTrace(odor_1,combined=F,z_score=T)
 PlotTraceCondition(odor_1,groupBy="pulse",z_score=T)
-PlotResume(odor_1,groupBy="antenna",z_score=T)
-PlotResume(odor_1,groupBy="",z_score=T)
+PlotResume(odor_1,groupby="antenna",z_score=T)
+PlotResume(odor_1,groupby="",z_score=T)
 
 #### Run all at once ####
 setwd("path/to/your/exp_info.csv+raw.csv")
