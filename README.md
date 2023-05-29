@@ -5,6 +5,10 @@
 # Install via devtools package to clone the repository into R session 
 
 devtools::install_github("IRlabDroso/LumarAnalysisIRlab")
+
+# Or with Tar.gz source file 
+
+install.packages("Path_to_file", type ="source", repos = NULL, dependencies = TRUE)
 ```
 
 ## Usage
